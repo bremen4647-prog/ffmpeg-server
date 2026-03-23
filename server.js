@@ -28,7 +28,7 @@ app.post('/create-video', async (req, res) => {
     // 음성 다운로드
     await downloadFile(audioUrl, `${tmpDir}/voice.mp3`);
 
-    // 이미지 리스트 파일
+    // 이미지 리스트
     const imgListFile = `${tmpDir}/imglist.txt`;
     const imgListContent = images.map((_, i) =>
       `file '${tmpDir}/img_${i}.jpg'\nduration 12`
@@ -37,10 +37,17 @@ app.post('/create-video', async (req, res) => {
 
     const outputPath = `${tmpDir}/output.mp4`;
 
-    // 자막 없이 영상 합치기 (메모리 절약)
-    execSync(`ffmpeg -f concat -safe 0 -i ${imgListFile} -i ${tmpDir}/voice.mp3 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -map 0:v -map 1:a -c:v libx264 -preset ultrafast -crf 28 -c:a aac -shortest -y ${outputPath}`, {
-      maxBuffer: 1024 * 1024 * 100
-    });
+    // BGM 있을 때와 없을 때 분리
+    if (bgmUrl) {
+      await downloadFile(bgmUrl, `${tmpDir}/bgm.mp3`);
+      execSync(`ffmpeg -f concat -safe 0 -i ${imgListFile} -i ${tmpDir}/voice.mp3 -i ${tmpDir}/bgm.mp3 -filter_complex "[1:a]volume=1.0[voice];[2:a]volume=0.15[bgm];[voice][bgm]amix=inputs=2:duration=first[audio]" -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -map 0:v -map "[audio]" -c:v libx264 -preset ultrafast -crf 28 -c:a aac -shortest -y ${outputPath}`, {
+        maxBuffer: 1024 * 1024 * 100
+      });
+    } else {
+      execSync(`ffmpeg -f concat -safe 0 -i ${imgListFile} -i ${tmpDir}/voice.mp3 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -map 0:v -map 1:a -c:v libx264 -preset ultrafast -crf 28 -c:a aac -shortest -y ${outputPath}`, {
+        maxBuffer: 1024 * 1024 * 100
+      });
+    }
 
     const videoBuffer = fs.readFileSync(outputPath);
     res.set('Content-Type', 'video/mp4');
