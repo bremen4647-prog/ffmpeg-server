@@ -20,7 +20,7 @@ app.post('/create-video', async (req, res) => {
     if (typeof images === 'string') images = JSON.parse(images);
     srtContent = srtContent.replace(/\\n/g, '\n');
 
-    // 이미지 다운로드
+    // 이미지 4장 다운로드
     for (let i = 0; i < images.length; i++) {
       await downloadFile(images[i].imageUrl, `${tmpDir}/img_${i}.jpg`);
     }
@@ -28,22 +28,23 @@ app.post('/create-video', async (req, res) => {
     // 음성 다운로드
     await downloadFile(audioUrl, `${tmpDir}/voice.mp3`);
 
-    // 이미지 리스트
+    // 이미지 리스트 (각 8초)
     const imgListFile = `${tmpDir}/imglist.txt`;
     const imgListContent = images.map((_, i) =>
-      `file '${tmpDir}/img_${i}.jpg'\nduration 12`
+      `file '${tmpDir}/img_${i}.jpg'\nduration 8`
     ).join('\n');
     fs.writeFileSync(imgListFile, imgListContent);
 
     const outputPath = `${tmpDir}/output.mp4`;
 
-    // BGM 있을 때와 없을 때 분리
     if (bgmUrl) {
+      // BGM 있을 때
       await downloadFile(bgmUrl, `${tmpDir}/bgm.mp3`);
       execSync(`ffmpeg -f concat -safe 0 -i ${imgListFile} -i ${tmpDir}/voice.mp3 -i ${tmpDir}/bgm.mp3 -filter_complex "[1:a]volume=1.0[voice];[2:a]volume=0.15[bgm];[voice][bgm]amix=inputs=2:duration=first[audio]" -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -map 0:v -map "[audio]" -c:v libx264 -preset ultrafast -crf 28 -c:a aac -shortest -y ${outputPath}`, {
         maxBuffer: 1024 * 1024 * 100
       });
     } else {
+      // BGM 없을 때
       execSync(`ffmpeg -f concat -safe 0 -i ${imgListFile} -i ${tmpDir}/voice.mp3 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -map 0:v -map 1:a -c:v libx264 -preset ultrafast -crf 28 -c:a aac -shortest -y ${outputPath}`, {
         maxBuffer: 1024 * 1024 * 100
       });
